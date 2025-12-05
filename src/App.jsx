@@ -23,6 +23,7 @@ import TaskDetail from './pages/worker/TaskDetail';
 // Client Pages
 import ClientLogin from './pages/client/ClientLogin';
 import ClientPortal from './pages/client/ClientPortal';
+import Sites from './pages/admin/Sites';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -139,6 +140,16 @@ const AppRoutes = () => {
           <ProtectedRoute allowedRoles={['admin']}>
             <DashboardLayout>
               <Reports />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/site"
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <DashboardLayout>
+              <Sites />
             </DashboardLayout>
           </ProtectedRoute>
         }
