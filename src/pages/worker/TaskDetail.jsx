@@ -1,8 +1,8 @@
-// frontend/src/pages/worker/TaskDetail.jsx - FIXED Materials
+// frontend/src/pages/worker/TaskDetail.jsx - UPDATED for Sites/Sections
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Camera, Upload, CheckCircle, Clock, X, Plus, Minus } from 'lucide-react';
+import { ArrowLeft, Camera, Upload, CheckCircle, Clock, X, Plus, Minus, MapPin, Layers, Image as ImageIcon } from 'lucide-react';
 import { tasksAPI, inventoryAPI } from '../../services/api';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -20,7 +20,10 @@ const TaskDetail = () => {
   const [afterPreviews, setAfterPreviews] = useState([]);
   const [uploading, setUploading] = useState(false);
   
-  // ✅ NEW: Materials Management
+  // ✅ NEW: Reference Images from Section
+  const [referenceImages, setReferenceImages] = useState([]);
+  
+  // Materials Management
   const [availableInventory, setAvailableInventory] = useState([]);
   const [selectedMaterials, setSelectedMaterials] = useState([]);
   const [showAddMaterial, setShowAddMaterial] = useState(false);
@@ -34,11 +37,18 @@ const TaskDetail = () => {
     try {
       setLoading(true);
       const response = await tasksAPI.getTask(id);
-      setTask(response.data.data);
+      const taskData = response.data.data;
+      
+      setTask(taskData);
+      
+      // ✅ Load reference images from response
+      if (taskData.referenceImages && taskData.referenceImages.length > 0) {
+        setReferenceImages(taskData.referenceImages);
+      }
       
       // Load existing materials
-      if (response.data.data.materials) {
-        setSelectedMaterials(response.data.data.materials.map(m => ({
+      if (taskData.materials) {
+        setSelectedMaterials(taskData.materials.map(m => ({
           item: m.item?._id || m.item,
           name: m.name || m.item?.name,
           quantity: m.quantity,
@@ -48,14 +58,14 @@ const TaskDetail = () => {
       }
       
       // Load existing images
-      if (response.data.data.images?.before) {
-        setBeforePreviews(response.data.data.images.before.map(img => ({
+      if (taskData.images?.before) {
+        setBeforePreviews(taskData.images.before.map(img => ({
           url: img.url,
           existing: true
         })));
       }
-      if (response.data.data.images?.after) {
-        setAfterPreviews(response.data.data.images.after.map(img => ({
+      if (taskData.images?.after) {
+        setAfterPreviews(taskData.images.after.map(img => ({
           url: img.url,
           existing: true
         })));
@@ -77,7 +87,7 @@ const TaskDetail = () => {
     }
   };
 
-  // ✅ NEW: Material Management Functions
+  // Material Management Functions
   const handleAddMaterial = (inventoryItem) => {
     const existing = selectedMaterials.find(m => m.item === inventoryItem._id);
     if (existing) {
@@ -312,10 +322,6 @@ const TaskDetail = () => {
                   <p className="font-semibold">{task.client?.name || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Location</p>
-                  <p className="font-semibold">{task.location?.address || 'N/A'}</p>
-                </div>
-                <div>
                   <p className="text-sm text-gray-500">Due Date</p>
                   <p className="font-semibold">
                     {new Date(task.scheduledDate).toLocaleDateString()}
@@ -327,9 +333,104 @@ const TaskDetail = () => {
                     {t(`priority.${task.priority}`)}
                   </p>
                 </div>
+                <div>
+                  <p className="text-sm text-gray-500">Category</p>
+                  <p className="font-semibold">{task.category}</p>
+                </div>
               </div>
             </div>
           </Card>
+
+          {/* ✅ NEW: Site & Section Info */}
+          {task.site && (
+            <Card title="📍 Site Information">
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  {task.site.coverImage?.url ? (
+                    <img
+                      src={task.site.coverImage.url}
+                      alt={task.site.name}
+                      className="w-20 h-20 rounded object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 bg-primary-100 rounded flex items-center justify-center flex-shrink-0">
+                      <MapPin className="w-10 h-10 text-primary-400" />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg text-gray-900">
+                      {task.site.name}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Type: {task.site.siteType} • Area: {task.site.totalArea}m²
+                    </p>
+                    {task.site.description && (
+                      <p className="text-sm text-gray-600 mt-2">
+                        {task.site.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Section Info if available */}
+                {task.section && referenceImages.length > 0 && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Layers className="w-5 h-5 text-primary-600" />
+                      <h4 className="font-semibold text-gray-900">
+                        Assigned Section: {task.section.name || 'Specific Section'}
+                      </h4>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-sm text-blue-800 flex items-center gap-2">
+                        <ImageIcon className="w-4 h-4" />
+                        <strong>{referenceImages.length} Reference Images</strong> available below
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Use these images as a guide for your work
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* ✅ NEW: Reference Images Section */}
+          {referenceImages.length > 0 && (
+            <Card title="📸 Reference Images (Before Work)">
+              <div className="space-y-3">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-yellow-800 font-medium">
+                    📋 Use these images as reference for the expected result
+                  </p>
+                  <p className="text-xs text-yellow-700 mt-1">
+                    Take your "After" photos matching these angles when possible
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {referenceImages.map((img, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={img.url}
+                        alt={`Reference ${index + 1}`}
+                        className="w-full h-32 object-cover rounded-lg border-2 border-primary-200 cursor-pointer hover:border-primary-400 transition-colors"
+                        onClick={() => window.open(img.url, '_blank')}
+                      />
+                      <div className="absolute bottom-2 right-2 bg-primary-600 text-white text-xs px-2 py-1 rounded">
+                        Ref #{index + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-xs text-gray-500 italic text-center">
+                  Click on any image to view full size
+                </p>
+              </div>
+            </Card>
+          )}
 
           {/* Photo Upload */}
           <Card title={t('worker.uploadPhotos')}>
@@ -441,7 +542,7 @@ const TaskDetail = () => {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* ✅ NEW: Materials Management */}
+          {/* Materials Management */}
           <Card title={t('worker.materialsReceived')}>
             <div className="space-y-3">
               {selectedMaterials.map((material, idx) => (

@@ -12,7 +12,8 @@ import {
   Flower2,
   BarChart3,
   LogOut,
-  X
+  X,
+  MapPin
 } from 'lucide-react';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -25,8 +26,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/admin', icon: LayoutDashboard, label: t('nav.dashboard') },
     { path: '/admin/clients', icon: Users, label: t('nav.clients') },
     { path: '/admin/workers', icon: Briefcase, label: t('nav.workers') },
-    { path: '/admin/site', icon: Flower2, label: t('nav.sites') },
-    { path: '/admin/tasks', icon: CheckSquare, label: t('nav.tasks') },
+    { path: '/admin/sites', icon: MapPin, label: 'Sites' },    { path: '/admin/tasks', icon: CheckSquare, label: t('nav.tasks') },
     { path: '/admin/invoices', icon: FileText, label: t('nav.invoices') },
     { path: '/admin/inventory', icon: Package, label: t('nav.inventory') },
     { path: '/admin/reports', icon: BarChart3, label: t('nav.reports') },
