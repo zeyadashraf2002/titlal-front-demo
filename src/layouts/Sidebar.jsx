@@ -25,7 +25,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/admin', icon: LayoutDashboard, label: t('nav.dashboard') },
     { path: '/admin/clients', icon: Users, label: t('nav.clients') },
     { path: '/admin/workers', icon: Briefcase, label: t('nav.workers') },
-    { path: '/admin/plants', icon: Flower2, label: t('nav.plants') },
+    { path: '/admin/site', icon: Flower2, label: t('nav.sites') },
     { path: '/admin/tasks', icon: CheckSquare, label: t('nav.tasks') },
     { path: '/admin/invoices', icon: FileText, label: t('nav.invoices') },
     { path: '/admin/inventory', icon: Package, label: t('nav.inventory') },
