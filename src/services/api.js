@@ -1,7 +1,7 @@
 // frontend/src/services/api.js - إضافة الـ API المفقودة
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -64,21 +64,64 @@ export const usersAPI = {
   createUser: (data) => api.post('/users', data),
   updateUser: (id, data) => api.put(`/users/${id}`, data),
   deleteUser: (id) => api.delete(`/users/${id}`),
- getWorkers: (params) => api.get('/users/workers', { params }),
+  // getWorkers: (params) => api.get('/users/workers', { params }),
 };
 
-// ✅ Tasks API
+// ✅ Sites API (NEW)
+export const sitesAPI = {
+  // Get all sites
+  getAllSites: (params) => api.get('/sites', { params }),
+  
+  // Get single site
+  getSite: (id) => api.get(`/sites/${id}`),
+  
+  // Create site (with cover image)
+  createSite: (formData) => api.post('/sites', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  
+  // Update site (with optional new cover image)
+  updateSite: (id, formData) => api.put(`/sites/${id}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  
+  // Delete site
+  deleteSite: (id) => api.delete(`/sites/${id}`),
+  
+  // ========================================
+  // Section Management
+  // ========================================
+  
+  // Add section to site (with reference images)
+  addSection: (siteId, formData) => api.post(`/sites/${siteId}/sections`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  
+  // Update section (can add more reference images)
+  updateSection: (siteId, sectionId, formData) => api.put(`/sites/${siteId}/sections/${sectionId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  
+  // Delete section
+  deleteSection: (siteId, sectionId) => api.delete(`/sites/${siteId}/sections/${sectionId}`),
+  
+  // Delete reference image from section
+  deleteReferenceImage: (siteId, sectionId, imageId) => api.delete(`/sites/${siteId}/sections/${sectionId}/images/${imageId}`),
+};
 export const tasksAPI = {
   getTasks: (params) => api.get('/tasks', { params }),
   getTask: (id) => api.get(`/tasks/${id}`),
+  
+  // ✅ UPDATED: Create task now requires site
   createTask: (data) => api.post('/tasks', data),
+  
   updateTask: (id, data) => api.put(`/tasks/${id}`, data),
   deleteTask: (id) => api.delete(`/tasks/${id}`),
   assignTask: (id, data) => api.post(`/tasks/${id}/assign`, data),
   startTask: (id, location) => api.post(`/tasks/${id}/start`, location),
   completeTask: (id, location) => api.post(`/tasks/${id}/complete`, location),
   
-  // Upload images with Cloudinary support
+  // Upload images
   uploadTaskImages: (id, formData) => api.post(`/tasks/${id}/images`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
@@ -86,7 +129,6 @@ export const tasksAPI = {
     data: { imageType }
   }),
 };
-
 // ✅ Plants API (Fixed - Cloudinary support)
 export const plantsAPI = {
   getPlants: (params) => api.get('/plants', { params }),
@@ -142,7 +184,7 @@ export const notificationsAPI = {
   deleteNotification: (id) => api.delete(`/notifications/${id}`),
 };
 
-// Helper functions
+// ✅ Helper function for localized text
 export const getLocalizedText = (multiLangObj, language = 'en') => {
   if (!multiLangObj) return '';
   if (typeof multiLangObj === 'string') return multiLangObj;

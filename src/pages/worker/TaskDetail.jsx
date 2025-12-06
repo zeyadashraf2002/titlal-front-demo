@@ -1,8 +1,8 @@
-// frontend/src/pages/worker/TaskDetail.jsx - FIXED Materials
+// frontend/src/pages/worker/TaskDetail.jsx - COMPLETE with Sites/Sections
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Camera, Upload, CheckCircle, Clock, X, Plus, Minus } from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle, Clock, X, Plus, Minus, MapPin, Layers, Image as ImageIcon } from 'lucide-react';
 import { tasksAPI, inventoryAPI } from '../../services/api';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -14,13 +14,18 @@ const TaskDetail = () => {
   const navigate = useNavigate();
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // ✅ UPDATED: State for Reference-Based Image Upload
   const [beforeImages, setBeforeImages] = useState([]);
   const [afterImages, setAfterImages] = useState([]);
-  const [beforePreviews, setBeforePreviews] = useState([]);
-  const [afterPreviews, setAfterPreviews] = useState([]);
+  const [beforePreviews, setBeforePreviews] = useState([]); // Array indexed by refImage
+  const [afterPreviews, setAfterPreviews] = useState([]); // Array indexed by refImage
   const [uploading, setUploading] = useState(false);
   
-  // ✅ NEW: Materials Management
+  // ✅ NEW: Reference Images from Section
+  const [referenceImages, setReferenceImages] = useState([]);
+  
+  // Materials Management
   const [availableInventory, setAvailableInventory] = useState([]);
   const [selectedMaterials, setSelectedMaterials] = useState([]);
   const [showAddMaterial, setShowAddMaterial] = useState(false);
@@ -34,30 +39,28 @@ const TaskDetail = () => {
     try {
       setLoading(true);
       const response = await tasksAPI.getTask(id);
-      setTask(response.data.data);
+      const taskData = response.data.data;
+      
+      setTask(taskData);
+      
+      // ✅ UPDATED: Initialize arrays for reference-based upload
+      if (taskData.referenceImages && taskData.referenceImages.length > 0) {
+        setReferenceImages(taskData.referenceImages);
+        
+        // Initialize arrays with same length as reference images
+        const refCount = taskData.referenceImages.length;
+        setBeforePreviews(new Array(refCount).fill(null));
+        setAfterPreviews(new Array(refCount).fill(null));
+      }
       
       // Load existing materials
-      if (response.data.data.materials) {
-        setSelectedMaterials(response.data.data.materials.map(m => ({
+      if (taskData.materials) {
+        setSelectedMaterials(taskData.materials.map(m => ({
           item: m.item?._id || m.item,
           name: m.name || m.item?.name,
           quantity: m.quantity,
           unit: m.unit || m.item?.unit,
           confirmed: m.confirmed || false
-        })));
-      }
-      
-      // Load existing images
-      if (response.data.data.images?.before) {
-        setBeforePreviews(response.data.data.images.before.map(img => ({
-          url: img.url,
-          existing: true
-        })));
-      }
-      if (response.data.data.images?.after) {
-        setAfterPreviews(response.data.data.images.after.map(img => ({
-          url: img.url,
-          existing: true
         })));
       }
     } catch (error) {
@@ -77,7 +80,7 @@ const TaskDetail = () => {
     }
   };
 
-  // ✅ NEW: Material Management Functions
+  // Material Management Functions
   const handleAddMaterial = (inventoryItem) => {
     const existing = selectedMaterials.find(m => m.item === inventoryItem._id);
     if (existing) {
@@ -123,47 +126,61 @@ const TaskDetail = () => {
     }
   };
 
+  // ✅ UPDATED: Handle image upload per reference image index
   const handleImageChange = (type, event) => {
-    const files = Array.from(event.target.files);
-    
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Extract index from input id (e.g., "before-0" → 0)
+    const inputId = event.target.id;
+    const index = parseInt(inputId.split('-')[1]);
+
     if (type === 'before') {
-      if (beforeImages.length + files.length > 50) {
-        alert('Maximum 50 images allowed');
-        return;
-      }
-      setBeforeImages(prev => [...prev, ...files]);
-      
-      files.forEach(file => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setBeforePreviews(prev => [...prev, { url: reader.result, file }]);
-        };
-        reader.readAsDataURL(file);
-      });
+      // Store file
+      const newBeforeImages = [...beforeImages];
+      newBeforeImages[index] = file;
+      setBeforeImages(newBeforeImages);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const newPreviews = [...beforePreviews];
+        newPreviews[index] = { url: reader.result, file };
+        setBeforePreviews(newPreviews);
+      };
+      reader.readAsDataURL(file);
     } else {
-      if (afterImages.length + files.length > 50) {
-        alert('Maximum 50 images allowed');
-        return;
-      }
-      setAfterImages(prev => [...prev, ...files]);
-      
-      files.forEach(file => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setAfterPreviews(prev => [...prev, { url: reader.result, file }]);
-        };
-        reader.readAsDataURL(file);
-      });
+      // Store file
+      const newAfterImages = [...afterImages];
+      newAfterImages[index] = file;
+      setAfterImages(newAfterImages);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const newPreviews = [...afterPreviews];
+        newPreviews[index] = { url: reader.result, file };
+        setAfterPreviews(newPreviews);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const removeImage = (type, index) => {
     if (type === 'before') {
-      setBeforeImages(prev => prev.filter((_, i) => i !== index));
-      setBeforePreviews(prev => prev.filter((_, i) => i !== index));
+      const newImages = [...beforeImages];
+      const newPreviews = [...beforePreviews];
+      newImages[index] = null;
+      newPreviews[index] = null;
+      setBeforeImages(newImages);
+      setBeforePreviews(newPreviews);
     } else {
-      setAfterImages(prev => prev.filter((_, i) => i !== index));
-      setAfterPreviews(prev => prev.filter((_, i) => i !== index));
+      const newImages = [...afterImages];
+      const newPreviews = [...afterPreviews];
+      newImages[index] = null;
+      newPreviews[index] = null;
+      setAfterImages(newImages);
+      setAfterPreviews(newPreviews);
     }
   };
 
@@ -189,15 +206,32 @@ const TaskDetail = () => {
 
   const handleFinishTask = async () => {
     try {
-      // Validation
-      if (beforeImages.length === 0 && beforePreviews.filter(p => !p.existing).length === 0) {
-        alert('Please upload at least one before photo');
-        return;
+      // ✅ UPDATED: Validation for reference-based images
+      const beforeCount = beforePreviews.filter(p => p !== null).length;
+      const afterCount = afterPreviews.filter(p => p !== null).length;
+      const refCount = referenceImages.length;
+
+      if (refCount > 0) {
+        if (beforeCount < refCount) {
+          alert(`Please upload all ${refCount} before photos (${beforeCount}/${refCount} completed)`);
+          return;
+        }
+        if (afterCount < refCount) {
+          alert(`Please upload all ${refCount} after photos (${afterCount}/${refCount} completed)`);
+          return;
+        }
+      } else {
+        // Fallback: at least one before/after if no reference images
+        if (beforeCount === 0) {
+          alert('Please upload at least one before photo');
+          return;
+        }
+        if (afterCount === 0) {
+          alert('Please upload at least one after photo');
+          return;
+        }
       }
-      if (afterImages.length === 0 && afterPreviews.filter(p => !p.existing).length === 0) {
-        alert('Please upload at least one after photo');
-        return;
-      }
+
       if (selectedMaterials.length === 0) {
         alert('Please add materials used');
         return;
@@ -209,10 +243,11 @@ const TaskDetail = () => {
 
       setUploading(true);
 
-      // Upload before images
-      if (beforeImages.length > 0) {
+      // ✅ Upload before images (filter out nulls)
+      const beforeFilesToUpload = beforeImages.filter(f => f !== null);
+      if (beforeFilesToUpload.length > 0) {
         const beforeFormData = new FormData();
-        beforeImages.forEach(file => {
+        beforeFilesToUpload.forEach(file => {
           beforeFormData.append('images', file);
         });
         beforeFormData.append('imageType', 'before');
@@ -221,10 +256,11 @@ const TaskDetail = () => {
         await tasksAPI.uploadTaskImages(id, beforeFormData);
       }
 
-      // Upload after images
-      if (afterImages.length > 0) {
+      // ✅ Upload after images (filter out nulls)
+      const afterFilesToUpload = afterImages.filter(f => f !== null);
+      if (afterFilesToUpload.length > 0) {
         const afterFormData = new FormData();
-        afterImages.forEach(file => {
+        afterFilesToUpload.forEach(file => {
           afterFormData.append('images', file);
         });
         afterFormData.append('imageType', 'after');
@@ -312,10 +348,6 @@ const TaskDetail = () => {
                   <p className="font-semibold">{task.client?.name || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Location</p>
-                  <p className="font-semibold">{task.location?.address || 'N/A'}</p>
-                </div>
-                <div>
                   <p className="text-sm text-gray-500">Due Date</p>
                   <p className="font-semibold">
                     {new Date(task.scheduledDate).toLocaleDateString()}
@@ -327,121 +359,247 @@ const TaskDetail = () => {
                     {t(`priority.${task.priority}`)}
                   </p>
                 </div>
+                <div>
+                  <p className="text-sm text-gray-500">Category</p>
+                  <p className="font-semibold">{task.category}</p>
+                </div>
               </div>
             </div>
           </Card>
 
-          {/* Photo Upload */}
-          <Card title={t('worker.uploadPhotos')}>
-            <div className="space-y-6">
-              {/* Before Photos */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t('worker.beforePhoto')} ({beforePreviews.length}/50)
-                </label>
-                
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={(e) => handleImageChange('before', e)}
-                    className="hidden"
-                    id="before-photos"
-                    disabled={task.status === 'completed'}
-                  />
-                  <label
-                    htmlFor="before-photos"
-                    className="flex flex-col items-center justify-center cursor-pointer"
-                  >
-                    <Camera className="w-12 h-12 text-gray-400 mb-2" />
-                    <span className="text-sm text-gray-600">
-                      Click to upload before photos
-                    </span>
-                  </label>
+          {/* ✅ NEW: Site & Section Info */}
+          {task.site && (
+            <Card title="📍 Site Information">
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  {task.site.coverImage?.url ? (
+                    <img
+                      src={task.site.coverImage.url}
+                      alt={task.site.name}
+                      className="w-20 h-20 rounded object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 bg-primary-100 rounded flex items-center justify-center flex-shrink-0">
+                      <MapPin className="w-10 h-10 text-primary-400" />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg text-gray-900">
+                      {task.site.name}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Type: {task.site.siteType} • Area: {task.site.totalArea}m²
+                    </p>
+                    {task.site.description && (
+                      <p className="text-sm text-gray-600 mt-2">
+                        {task.site.description}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                {beforePreviews.length > 0 && (
-                  <div className="grid grid-cols-4 gap-2 mt-4">
-                    {beforePreviews.map((img, index) => (
-                      <div key={index} className="relative group">
-                        <img
-                          src={img.url}
-                          alt={`Before ${index + 1}`}
-                          className="w-full h-20 object-cover rounded"
-                        />
-                        {!img.existing && task.status !== 'completed' && (
-                          <button
-                            type="button"
-                            onClick={() => removeImage('before', index)}
-                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                {/* Section Info if available */}
+                {task.section && referenceImages.length > 0 && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Layers className="w-5 h-5 text-primary-600" />
+                      <h4 className="font-semibold text-gray-900">
+                        Assigned Section: {task.section.name || 'Specific Section'}
+                      </h4>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-sm text-blue-800 flex items-center gap-2">
+                        <ImageIcon className="w-4 h-4" />
+                        <strong>{referenceImages.length} Reference Images</strong> available below
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Use these images as a guide for your work
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
+            </Card>
+          )}
 
-              {/* After Photos */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t('worker.afterPhoto')} ({afterPreviews.length}/50)
-                </label>
-                
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={(e) => handleImageChange('after', e)}
-                    className="hidden"
-                    id="after-photos"
-                    disabled={task.status === 'completed'}
-                  />
-                  <label
-                    htmlFor="after-photos"
-                    className="flex flex-col items-center justify-center cursor-pointer"
-                  >
-                    <Camera className="w-12 h-12 text-gray-400 mb-2" />
-                    <span className="text-sm text-gray-600">
-                      Click to upload after photos
-                    </span>
-                  </label>
+          {/* ✅ UPDATED: Reference Images with Before/After Upload */}
+          {referenceImages.length > 0 && (
+            <Card title="📸 Work Reference Guide">
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-sm text-blue-800 font-medium">
+                    📋 Complete each section: Reference → Before → After
+                  </p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Take photos from the same angle as the reference images
+                  </p>
                 </div>
 
-                {afterPreviews.length > 0 && (
-                  <div className="grid grid-cols-4 gap-2 mt-4">
-                    {afterPreviews.map((img, index) => (
-                      <div key={index} className="relative group">
-                        <img
-                          src={img.url}
-                          alt={`After ${index + 1}`}
-                          className="w-full h-20 object-cover rounded"
-                        />
-                        {!img.existing && task.status !== 'completed' && (
-                          <button
-                            type="button"
-                            onClick={() => removeImage('after', index)}
-                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
+                {/* Reference Image Cards with Upload Areas */}
+                <div className="space-y-6">
+                  {referenceImages.map((refImg, refIndex) => (
+                    <div key={refIndex} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
+                      {/* Header */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="bg-primary-600 text-white text-xs font-bold px-2 py-1 rounded">
+                          #{refIndex + 1}
+                        </span>
+                        <h4 className="font-semibold text-gray-900">
+                          {refImg.caption || `Work Area ${refIndex + 1}`}
+                        </h4>
                       </div>
-                    ))}
+
+                      {/* 3-Column Layout: Reference | Before | After */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Reference Image */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">
+                            📋 Reference
+                          </label>
+                          <div 
+                            className="relative group cursor-pointer"
+                            onClick={() => window.open(refImg.url, '_blank')}
+                          >
+                            <img
+                              src={refImg.url}
+                              alt={`Reference ${refIndex + 1}`}
+                              className="w-full h-40 object-cover rounded-lg border-2 border-primary-300"
+                            />
+                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded-lg flex items-center justify-center">
+                              <span className="text-white opacity-0 group-hover:opacity-100 text-sm font-medium">
+                                Click to enlarge
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Before Photo Upload */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">
+                            📷 Before Work
+                          </label>
+                          {beforePreviews[refIndex] ? (
+                            <div className="relative group">
+                              <img
+                                src={beforePreviews[refIndex].url}
+                                alt={`Before ${refIndex + 1}`}
+                                className="w-full h-40 object-cover rounded-lg border-2 border-blue-300"
+                              />
+                              {!beforePreviews[refIndex].existing && task.status !== 'completed' && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeImage('before', refIndex)}
+                                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg h-40 flex flex-col items-center justify-center hover:border-blue-400 hover:bg-blue-50 transition-colors">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageChange('before', e)}
+                                className="hidden"
+                                id={`before-${refIndex}`}
+                                disabled={task.status === 'completed'}
+                              />
+                              <label
+                                htmlFor={`before-${refIndex}`}
+                                className="cursor-pointer flex flex-col items-center"
+                              >
+                                <Camera className="w-8 h-8 text-gray-400 mb-1" />
+                                <span className="text-xs text-gray-600 text-center">
+                                  Upload<br />Before Photo
+                                </span>
+                              </label>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* After Photo Upload */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">
+                            ✅ After Work
+                          </label>
+                          {afterPreviews[refIndex] ? (
+                            <div className="relative group">
+                              <img
+                                src={afterPreviews[refIndex].url}
+                                alt={`After ${refIndex + 1}`}
+                                className="w-full h-40 object-cover rounded-lg border-2 border-green-300"
+                              />
+                              {!afterPreviews[refIndex].existing && task.status !== 'completed' && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeImage('after', refIndex)}
+                                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg h-40 flex flex-col items-center justify-center hover:border-green-400 hover:bg-green-50 transition-colors">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageChange('after', e)}
+                                className="hidden"
+                                id={`after-${refIndex}`}
+                                disabled={task.status === 'completed'}
+                              />
+                              <label
+                                htmlFor={`after-${refIndex}`}
+                                className="cursor-pointer flex flex-col items-center"
+                              >
+                                <Camera className="w-8 h-8 text-gray-400 mb-1" />
+                                <span className="text-xs text-gray-600 text-center">
+                                  Upload<br />After Photo
+                                </span>
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Progress Indicator */}
+                      <div className="mt-3 flex items-center gap-2 text-xs">
+                        <div className={`flex items-center gap-1 ${beforePreviews[refIndex] ? 'text-green-600' : 'text-gray-400'}`}>
+                          {beforePreviews[refIndex] ? <CheckCircle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                          <span>Before</span>
+                        </div>
+                        <span className="text-gray-300">•</span>
+                        <div className={`flex items-center gap-1 ${afterPreviews[refIndex] ? 'text-green-600' : 'text-gray-400'}`}>
+                          {afterPreviews[refIndex] ? <CheckCircle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                          <span>After</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Overall Progress */}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-green-800">
+                      Progress: {beforePreviews.filter(p => p).length}/{referenceImages.length} Before • {afterPreviews.filter(p => p).length}/{referenceImages.length} After
+                    </span>
+                    {beforePreviews.filter(p => p).length === referenceImages.length && 
+                     afterPreviews.filter(p => p).length === referenceImages.length && (
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    )}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* ✅ NEW: Materials Management */}
+          {/* Materials Management */}
           <Card title={t('worker.materialsReceived')}>
             <div className="space-y-3">
               {selectedMaterials.map((material, idx) => (
@@ -536,7 +694,6 @@ const TaskDetail = () => {
               )}
             </div>
           </Card>
-
           {/* Task Time */}
           {task.startedAt && (
             <Card title={t('worker.taskTime')}>
