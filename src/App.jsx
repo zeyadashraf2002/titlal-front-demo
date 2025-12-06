@@ -134,7 +134,7 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-      <Route
+      {/* <Route
         path="/admin/reports"
         element={
           <ProtectedRoute allowedRoles={['admin']}>
@@ -143,9 +143,9 @@ const AppRoutes = () => {
             </DashboardLayout>
           </ProtectedRoute>
         }
-      />
+      /> */}
       <Route
-        path="/admin/site"
+        path="/admin/sites"
         element={
           <ProtectedRoute allowedRoles={['admin']}>
             <DashboardLayout>
