@@ -1,4 +1,4 @@
-// frontend/src/pages/admin/Tasks.jsx - FIXED with clickable rows
+// frontend/src/pages/admin/Tasks.jsx - ✅ UPDATED
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -50,7 +50,6 @@ const Tasks = () => {
     fetchTasks();
   };
 
-  // ✅ NEW: Navigate to task details on row click
   const handleRowClick = (task) => {
     navigate(`/admin/tasks/${task._id}`);
   };
@@ -149,7 +148,7 @@ const Tasks = () => {
         </div>
       </div>
 
-      {/* Tasks Table/Cards */}
+      {/* Tasks Table */}
       <Card>
         {filteredTasks.length === 0 ? (
           <div className="text-center py-12">
@@ -162,6 +161,9 @@ const Tasks = () => {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Task
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Site / Section {/* ✅ UPDATED */}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Client
@@ -193,6 +195,19 @@ const Tasks = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{task.title}</div>
                       <div className="text-sm text-gray-500 truncate max-w-xs">{task.description}</div>
+                    </td>
+                    {/* ✅ UPDATED: Show Site + Section */}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-900">
+                          {task.site?.name || 'N/A'}
+                        </span>
+                        {task.section && (
+                          <span className="text-xs text-gray-500">
+                            Section: {task.section}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {task.client?.name || 'N/A'}
