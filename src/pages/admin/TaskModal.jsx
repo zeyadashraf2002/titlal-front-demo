@@ -1,31 +1,40 @@
+// frontend/src/pages/admin/TaskModal.jsx - FINAL VERSION (No Plants, Section Required)
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useForm } from 'react-hook-form';
-import { X, Upload, Image as ImageIcon } from 'lucide-react';
+import { MapPin, Layers, AlertCircle } from 'lucide-react';
 import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
 import Button from '../../components/common/Button';
-import { tasksAPI, clientsAPI, usersAPI, plantsAPI } from '../../services/api';
+import { tasksAPI, sitesAPI, usersAPI } from '../../services/api';
 
 const TaskModal = ({ isOpen, onClose, task, onSuccess }) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [clients, setClients] = useState([]);
+
+  // Data
+  const [sites, setSites] = useState([]);
   const [workers, setWorkers] = useState([]);
-  const [plants, setPlants] = useState([]);
-  const [referenceImages, setReferenceImages] = useState([]);
-  const [imagePreviews, setImagePreviews] = useState([]);
+  const [selectedSite, setSelectedSite] = useState(null);
+  const [availableSections, setAvailableSections] = useState([]);
+  const [selectedSection, setSelectedSection] = useState(null);
 
   const {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors }
   } = useForm({
     defaultValues: task || {}
   });
+
+  // Watch site and section selection
+  const watchSite = watch('site');
+  const watchSection = watch('section');
 
   useEffect(() => {
     fetchData();
@@ -33,70 +42,93 @@ const TaskModal = ({ isOpen, onClose, task, onSuccess }) => {
 
   useEffect(() => {
     if (task) {
-      reset(task);
-      if (task.images?.reference) {
-        setImagePreviews(task.images.reference.map(img => ({
-          url: img.url,
-          preview: `${import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:5001'}/${img.url}`
-        })));
+      reset({
+        ...task,
+        site: task.site?._id || '',
+        section: task.section || '',
+        client: task.client?._id || '',
+        worker: task.worker?._id || '',
+        branch: task.branch?._id || ''
+      });
+      
+      if (task.site?._id) {
+        loadSiteDetails(task.site._id);
       }
     } else {
       reset({
         title: '',
         description: '',
+        site: '',
+        section: '',
         client: '',
         worker: '',
         category: 'lawn-mowing',
         priority: 'medium',
         scheduledDate: '',
-        estimatedDuration: 2,
-        plants: []
+        estimatedDuration: 2
       });
     }
   }, [task, reset]);
 
+  // Handle site selection change
+  useEffect(() => {
+    if (watchSite) {
+      loadSiteDetails(watchSite);
+    } else {
+      setSelectedSite(null);
+      setAvailableSections([]);
+      setSelectedSection(null);
+      setValue('client', '');
+      setValue('section', '');
+    }
+  }, [watchSite]);
+
+  // Handle section selection change
+  useEffect(() => {
+    if (watchSection && availableSections.length > 0) {
+      const section = availableSections.find(s => s._id === watchSection);
+      setSelectedSection(section);
+    } else {
+      setSelectedSection(null);
+    }
+  }, [watchSection, availableSections]);
+
   const fetchData = async () => {
     try {
-      const [clientsRes, workersRes, plantsRes] = await Promise.all([
-        clientsAPI.getClients(),
-        usersAPI.getWorkers(),
-        plantsAPI.getPlants()
+      const [sitesRes, workersRes] = await Promise.all([
+        sitesAPI.getAllSites(),
+        usersAPI.getWorkers()
       ]);
       
-      setClients(clientsRes.data.data || []);
+      setSites(sitesRes.data.data || []);
       setWorkers(workersRes.data.data || []);
-      setPlants(plantsRes.data.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
   };
 
-  const handleImageChange = (e) => {
-    const files = Array.from(e.target.files);
-    
-    if (files.length + imagePreviews.length > 50) {
-      alert('Maximum 50 images allowed');
-      return;
+  const loadSiteDetails = async (siteId) => {
+    try {
+      const response = await sitesAPI.getSite(siteId);
+      const siteData = response.data.data;
+      
+      setSelectedSite(siteData);
+      setAvailableSections(siteData.sections || []);
+      
+      // Auto-fill client from site
+      if (siteData.client?._id) {
+        setValue('client', siteData.client._id);
+      }
+      
+      // Auto-fill branch if available
+      if (siteData.branch?._id) {
+        setValue('branch', siteData.branch._id);
+      }
+    } catch (error) {
+      console.error('Error loading site:', error);
+      setSelectedSite(null);
+      setAvailableSections([]);
     }
-
-    setReferenceImages(prev => [...prev, ...files]);
-
-    // Create previews
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreviews(prev => [...prev, {
-          file,
-          preview: reader.result
-        }]);
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const removeImage = (index) => {
-    setImagePreviews(prev => prev.filter((_, i) => i !== index));
-    setReferenceImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const onSubmit = async (data) => {
@@ -104,28 +136,43 @@ const TaskModal = ({ isOpen, onClose, task, onSuccess }) => {
       setLoading(true);
       setError('');
 
+      // ✅ Validation
+      if (!data.site) {
+        setError('Please select a site');
+        setLoading(false);
+        return;
+      }
+
+      if (!data.section) {
+        setError('Please select a section');
+        setLoading(false);
+        return;
+      }
+
+      if (!data.client) {
+        setError('Client is required (auto-filled from site)');
+        setLoading(false);
+        return;
+      }
+
+      // ✅ Prepare task data
+      const taskData = {
+        ...data,
+        site: data.site,
+        section: data.section,
+        client: data.client,
+        worker: data.worker || null
+      };
+
       if (task) {
-        await tasksAPI.updateTask(task._id, data);
+        await tasksAPI.updateTask(task._id, taskData);
       } else {
-        const response = await tasksAPI.createTask(data);
-        
-        // Upload reference images if any
-        if (referenceImages.length > 0 && response.data.data._id) {
-          const formData = new FormData();
-          referenceImages.forEach(file => {
-            formData.append('images', file);
-          });
-          formData.append('imageType', 'reference');
-          
-          await tasksAPI.uploadTaskImages(response.data.data._id, formData);
-        }
+        await tasksAPI.createTask(taskData);
       }
 
       onSuccess();
       onClose();
       reset();
-      setImagePreviews([]);
-      setReferenceImages([]);
     } catch (err) {
       setError(err.response?.data?.message || 'An error occurred');
     } finally {
@@ -142,12 +189,13 @@ const TaskModal = ({ isOpen, onClose, task, onSuccess }) => {
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">
-            {error}
+          <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
 
-        {/* Basic Info */}
+        {/* Task Name */}
         <Input
           label={t('admin.tasks.taskName')}
           {...register('title', { required: 'Task name is required' })}
@@ -155,6 +203,7 @@ const TaskModal = ({ isOpen, onClose, task, onSuccess }) => {
           required
         />
 
+        {/* Description */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             {t('admin.tasks.description')} <span className="text-red-500">*</span>
@@ -169,24 +218,132 @@ const TaskModal = ({ isOpen, onClose, task, onSuccess }) => {
           )}
         </div>
 
-        {/* Client & Worker */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select
-            label={t('admin.tasks.client')}
-            {...register('client', { required: 'Client is required' })}
-            error={errors.client?.message}
-            options={clients.map(c => ({ value: c._id, label: c.name }))}
-            placeholder="Select client"
-            required
-          />
-
-          <Select
-            label={t('admin.tasks.assignedTo')}
-            {...register('worker')}
-            options={workers.map(w => ({ value: w._id, label: w.name }))}
-            placeholder="Select worker (optional)"
-          />
+        {/* ✅ Site Selection (REQUIRED) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            <MapPin className="w-4 h-4 inline mr-1" />
+            Site <span className="text-red-500">*</span>
+          </label>
+          <select
+            {...register('site', { required: 'Site is required' })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="">Select site...</option>
+            {sites.map(site => (
+              <option key={site._id} value={site._id}>
+                {site.name} ({site.client?.name})
+              </option>
+            ))}
+          </select>
+          {errors.site && (
+            <p className="mt-1 text-sm text-red-500">{errors.site.message}</p>
+          )}
         </div>
+
+        {/* ✅ Site Info Preview */}
+        {selectedSite && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              {selectedSite.coverImage?.url ? (
+                <img
+                  src={selectedSite.coverImage.url}
+                  alt={selectedSite.name}
+                  className="w-16 h-16 rounded object-cover flex-shrink-0"
+                />
+              ) : (
+                <div className="w-16 h-16 bg-primary-100 rounded flex items-center justify-center flex-shrink-0">
+                  <MapPin className="w-8 h-8 text-primary-400" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-gray-900">{selectedSite.name}</h4>
+                <p className="text-sm text-gray-600">
+                  Client: {selectedSite.client?.name}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Type: {selectedSite.siteType} • Area: {selectedSite.totalArea}m²
+                </p>
+                <p className="text-sm text-primary-600 font-medium mt-1">
+                  <Layers className="w-4 h-4 inline mr-1" />
+                  {selectedSite.sections?.length || 0} sections available
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Section Selection (REQUIRED) */}
+        {availableSections.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Layers className="w-4 h-4 inline mr-1" />
+              Section <span className="text-red-500">*</span>
+            </label>
+            <select
+              {...register('section', { required: 'Section is required' })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">Select section...</option>
+              {availableSections.map(section => (
+                <option key={section._id} value={section._id}>
+                  {section.name}
+                  {section.referenceImages?.length > 0 && 
+                    ` (${section.referenceImages.length} ref. images)`
+                  }
+                </option>
+              ))}
+            </select>
+            {errors.section && (
+              <p className="mt-1 text-sm text-red-500">{errors.section.message}</p>
+            )}
+          </div>
+        )}
+
+        {/* ✅ Section Preview */}
+        {selectedSection && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h4 className="font-semibold text-gray-900 mb-2">
+              Selected Section: {selectedSection.name}
+            </h4>
+            {selectedSection.description && (
+              <p className="text-sm text-gray-600 mb-2">
+                {selectedSection.description}
+              </p>
+            )}
+            {selectedSection.area > 0 && (
+              <p className="text-sm text-gray-700">
+                Area: {selectedSection.area}m²
+              </p>
+            )}
+            {selectedSection.referenceImages?.length > 0 && (
+              <div className="mt-3">
+                <p className="text-sm font-medium text-green-800">
+                  📸 {selectedSection.referenceImages.length} Reference Images Available
+                </p>
+                <p className="text-xs text-green-700 mt-1">
+                  Workers will see these reference images during task execution
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ✅ Client (Auto-filled, Read-only) */}
+        <Input
+          label="Client"
+          value={selectedSite?.client?.name || 'Select a site first'}
+          disabled
+          className="bg-gray-100"
+        />
+        <input type="hidden" {...register('client')} />
+
+        {/* Worker Selection */}
+        <Select
+          label={t('admin.tasks.assignedTo')}
+          {...register('worker')}
+          options={workers.map(w => ({ value: w._id, label: w.name }))}
+          placeholder="Select worker (optional)"
+        />
 
         {/* Category, Priority, Date */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -223,74 +380,27 @@ const TaskModal = ({ isOpen, onClose, task, onSuccess }) => {
           />
         </div>
 
-        {/* Plants Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {t('nav.plants')} (Optional)
-          </label>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto border rounded-lg p-2">
-            {plants.map((plant) => (
-              <label key={plant._id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                <input
-                  type="checkbox"
-                  value={plant._id}
-                  {...register('plants')}
-                  className="rounded text-green-600"
-                />
-                <span className="text-sm">{plant.name?.en || plant.name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+        {/* Estimated Duration */}
+        <Input
+          label="Estimated Duration (hours)"
+          type="number"
+          {...register('estimatedDuration')}
+          min="1"
+          step="0.5"
+        />
 
-        {/* Reference Images Upload (up to 50) */}
+        {/* Info Message */}
         {!task && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Reference Images (Max 50)
-            </label>
-            
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleImageChange}
-                className="hidden"
-                id="reference-images"
-              />
-              <label
-                htmlFor="reference-images"
-                className="flex flex-col items-center justify-center cursor-pointer"
-              >
-                <Upload className="w-12 h-12 text-gray-400 mb-2" />
-                <span className="text-sm text-gray-600">
-                  Click to upload images ({imagePreviews.length}/50)
-                </span>
-              </label>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-yellow-800">
+              <p className="font-medium">Important:</p>
+              <ul className="list-disc ml-4 mt-1 space-y-1">
+                <li>Site selection is required</li>
+                <li>Section selection is required</li>
+                <li>Workers will see section's reference images during task execution</li>
+              </ul>
             </div>
-
-            {/* Image Previews */}
-            {imagePreviews.length > 0 && (
-              <div className="grid grid-cols-4 gap-2 mt-4">
-                {imagePreviews.map((img, index) => (
-                  <div key={index} className="relative group">
-                    <img
-                      src={img.preview}
-                      alt={`Preview ${index + 1}`}
-                      className="w-full h-20 object-cover rounded"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(index)}
-                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
